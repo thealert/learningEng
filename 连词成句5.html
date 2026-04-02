@@ -312,22 +312,118 @@ We are friends|我们是朋友"></textarea>
     });
 }());
 
-// 朗读单词
-function speakWord(word) {
-  if ('speechSynthesis' in window) {
-    let u = new SpeechSynthesisUtterance(word);
-    u.lang = 'en-US';
-    u.rate = 0.95;
-    window.speechSynthesis.speak(u);
+// 向 Cloudflare Pages Function 请求签名 URL
+// Cloudflare 部署时 key 存在服务端环境变量，本地测试时返回 null
+async function fetchSignedWsUrl() {
+  try {
+    const res = await fetch('/api/tts-sign');
+    if (!res.ok) return null;
+    return await res.json(); // { wsUrl, appId }
+  } catch (e) {
+    return null;
   }
 }
-// 朗读中文
+
+// PCM 裸数据转 WAV
+function pcmToWav(pcmData, sampleRate) {
+  const numChannels = 1, bitsPerSample = 16;
+  const byteRate = sampleRate * numChannels * bitsPerSample / 8;
+  const blockAlign = numChannels * bitsPerSample / 8;
+  const buf = new ArrayBuffer(44 + pcmData.length);
+  const v = new DataView(buf);
+  const str = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+  str(0, 'RIFF'); v.setUint32(4, 36 + pcmData.length, true); str(8, 'WAVE');
+  str(12, 'fmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true);
+  v.setUint16(22, numChannels, true); v.setUint32(24, sampleRate, true);
+  v.setUint32(28, byteRate, true); v.setUint16(32, blockAlign, true);
+  v.setUint16(34, bitsPerSample, true); str(36, 'data'); v.setUint32(40, pcmData.length, true);
+  new Uint8Array(buf, 44).set(pcmData);
+  return buf;
+}
+
+// 讯飞语音合成（WebSocket）
+async function speakByXunfei(text) {
+  try {
+    // 向 Cloudflare Pages Function 获取签名 URL（key 存服务端，不暴露前端）
+    const signed = await fetchSignedWsUrl();
+    if (!signed) return false;
+
+    const { wsUrl, appId } = signed;
+    return new Promise((resolve) => {
+      const ws = new WebSocket(wsUrl);
+      const chunks = [];
+      const timeout = setTimeout(() => { ws.close(); resolve(false); }, 8000);
+
+      ws.onopen = () => {
+        ws.send(JSON.stringify({
+          common:   { app_id: appId },
+          business: { aue: 'raw', auf: 'audio/L16;rate=16000', vcn: 'x4_xiaoyan', tte: 'utf8', speed: 50, pitch: 50, volume: 80 },
+          data:     { status: 2, text: btoa(unescape(encodeURIComponent(text))) }
+        }));
+      };
+      ws.onmessage = (e) => {
+        const res = JSON.parse(e.data);
+        if (res.code !== 0) {
+          console.warn('[讯飞TTS] 错误码:', res.code, res.message);
+          clearTimeout(timeout); ws.close(); resolve(false); return;
+        }
+        if (!res.data) return;
+        if (res.data.audio) {
+          const bytes = Uint8Array.from(atob(res.data.audio), c => c.charCodeAt(0));
+          chunks.push(bytes);
+        }
+        if (res.data.status === 2) {
+          clearTimeout(timeout);
+          ws.close();
+          const total = chunks.reduce((a, b) => a + b.length, 0);
+          const merged = new Uint8Array(total);
+          let off = 0;
+          chunks.forEach(c => { merged.set(c, off); off += c.length; });
+          const wav = pcmToWav(merged, 16000);
+          const blob = new Blob([wav], { type: 'audio/wav' });
+          const blobUrl = URL.createObjectURL(blob);
+          const audio = new Audio(blobUrl);
+          audio.onended = () => URL.revokeObjectURL(blobUrl);
+          audio.play().catch(() => {});
+          resolve(true);
+        }
+      };
+      ws.onerror = () => { clearTimeout(timeout); resolve(false); };
+    });
+  } catch (e) {
+    return false;
+  }
+}
+
+// 是否 Android 设备
+const isAndroid = /Android/i.test(navigator.userAgent);
+
+// Web Speech API
+function speakBySpeechAPI(text, lang) {
+  if (!('speechSynthesis' in window)) return false;
+  window.speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = lang;
+  u.rate = 0.95;
+  window.speechSynthesis.speak(u);
+  return true;
+}
+
+// 朗读单词：Android → 讯飞优先；iOS/Windows → 直接 Web Speech API
+function speakWord(word) {
+  if (isAndroid) {
+    speakByXunfei(word).then(ok => { if (!ok) speakBySpeechAPI(word, 'en-US'); });
+  } else {
+    speakBySpeechAPI(word, 'en-US');
+  }
+}
+
+// 朗读中文：Android → 讯飞优先；iOS/Windows → 直接 Web Speech API
 function speakChinese(text) {
-  if ('speechSynthesis' in window) {
-    let u = new SpeechSynthesisUtterance(text);
-    u.lang = 'zh-CN';
-    u.rate = 0.95;
-    window.speechSynthesis.speak(u);
+  if (isAndroid) {
+    speakByXunfei(text).then(ok => { if (!ok) speakBySpeechAPI(text, 'zh-CN'); });
+  } else {
+    speakBySpeechAPI(text, 'zh-CN');
   }
 }
 
