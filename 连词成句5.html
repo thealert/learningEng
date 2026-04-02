@@ -245,6 +245,8 @@
   <button onclick="closeVictory()" class="btn-primary">再来一局</button>
 </div>
 
+<div id="ttsDebug" style="display:none;position:fixed;bottom:0;left:0;right:0;background:rgba(0,0,0,0.85);color:#0f0;font-size:12px;padding:8px 12px;z-index:9999;max-height:120px;overflow-y:auto;font-family:monospace;"></div>
+
 <div class="container">
   <div class="title-box">连词成句 · 闯关游戏</div>
 
@@ -344,17 +346,22 @@ function pcmToWav(pcmData, sampleRate) {
 // 讯飞语音合成（WebSocket）
 async function speakByXunfei(text) {
   try {
-    // 向 Cloudflare Pages Function 获取签名 URL（key 存服务端，不暴露前端）
+    ttsLog('📡 获取签名 URL...');
     const signed = await fetchSignedWsUrl();
-    if (!signed) return false;
+    if (!signed) { ttsLog('❌ 签名接口失败', '#f44'); return false; }
 
+    ttsLog('🔌 连接 WebSocket...');
     const { wsUrl, appId } = signed;
     return new Promise((resolve) => {
       const ws = new WebSocket(wsUrl);
       const chunks = [];
-      const timeout = setTimeout(() => { ws.close(); resolve(false); }, 8000);
+      const timeout = setTimeout(() => {
+        ttsLog('⏱ WebSocket 超时', '#fa0');
+        ws.close(); resolve(false);
+      }, 8000);
 
       ws.onopen = () => {
+        ttsLog('✅ WS 已连接，发送文本');
         ws.send(JSON.stringify({
           common:   { app_id: appId },
           business: { aue: 'raw', auf: 'audio/L16;rate=16000', vcn: 'x4_xiaoyan', tte: 'utf8', speed: 50, pitch: 50, volume: 80 },
@@ -364,7 +371,7 @@ async function speakByXunfei(text) {
       ws.onmessage = (e) => {
         const res = JSON.parse(e.data);
         if (res.code !== 0) {
-          console.warn('[讯飞TTS] 错误码:', res.code, res.message);
+          ttsLog('❌ 讯飞错误 code=' + res.code + ' ' + res.message, '#f44');
           clearTimeout(timeout); ws.close(); resolve(false); return;
         }
         if (!res.data) return;
@@ -376,6 +383,7 @@ async function speakByXunfei(text) {
           clearTimeout(timeout);
           ws.close();
           const total = chunks.reduce((a, b) => a + b.length, 0);
+          ttsLog('🎵 合成完成 ' + total + ' bytes，播放中...');
           const merged = new Uint8Array(total);
           let off = 0;
           chunks.forEach(c => { merged.set(c, off); off += c.length; });
@@ -383,20 +391,56 @@ async function speakByXunfei(text) {
           const blob = new Blob([wav], { type: 'audio/wav' });
           const blobUrl = URL.createObjectURL(blob);
           const audio = new Audio(blobUrl);
-          audio.onended = () => URL.revokeObjectURL(blobUrl);
-          audio.play().catch(() => {});
+          audio.onended = () => { URL.revokeObjectURL(blobUrl); ttsLog('▶ 播放结束'); };
+          audio.onerror = (e) => ttsLog('❌ 播放失败: ' + e.message, '#f44');
+          audio.play().catch(err => ttsLog('❌ play() 被拦截: ' + err, '#f44'));
           resolve(true);
         }
       };
-      ws.onerror = () => { clearTimeout(timeout); resolve(false); };
+      ws.onerror = (e) => {
+        ttsLog('❌ WS 错误: ' + JSON.stringify(e), '#f44');
+        clearTimeout(timeout); resolve(false);
+      };
     });
   } catch (e) {
+    ttsLog('❌ 异常: ' + e, '#f44');
     return false;
   }
 }
 
 // 是否 Android 设备
 const isAndroid = /Android/i.test(navigator.userAgent);
+
+// 调试日志（手机可见）
+function ttsLog(msg, color) {
+  const el = document.getElementById('ttsDebug');
+  if (!el) return;
+  el.style.display = 'block';
+  const line = document.createElement('div');
+  line.style.color = color || '#0f0';
+  line.textContent = new Date().toLocaleTimeString() + ' ' + msg;
+  el.appendChild(line);
+  el.scrollTop = el.scrollHeight;
+}
+
+// Android autoplay 解锁：首次用户点击时预创建并播放一段静音音频
+let _audioUnlocked = false;
+function unlockAudio() {
+  if (_audioUnlocked || !isAndroid) return;
+  _audioUnlocked = true;
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const buf = ctx.createBuffer(1, 1, 22050);
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    src.connect(ctx.destination);
+    src.start(0);
+    ttsLog('🔓 Audio context 已解锁');
+  } catch(e) {
+    ttsLog('⚠️ Audio unlock 失败: ' + e, '#fa0');
+  }
+}
+document.addEventListener('click', unlockAudio, { once: true });
 
 // Web Speech API
 function speakBySpeechAPI(text, lang) {
