@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>连词成句闯关游戏</title>
+  <style>
+    *{
+      box-sizing:border-box;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    }
+    body{
+      margin:0;
+      padding:20px;
+      background: #F8F9FC;
+      min-height:100vh;
+    }
+    .container{
+      max-width:1000px;
+      margin:0 auto;
+      position:relative;
+      z-index:10;
+    }
+
+    /* 左侧砖块塔 */
+    .brick-tower{
+      position:fixed;
+      left:20px;
+      top:50%;
+      transform:translateY(-50%);
+      display:flex;
+      flex-direction:column-reverse;
+      gap:6px;
+      z-index:5;
+    }
+    .brick{
+      width:70px;
+      height:36px;
+      background:#6366F1;
+      border-radius:6px;
+      opacity:0;
+      transform:translateY(20px);
+      transition:all 0.4s ease;
+      box-shadow:0 4px 12px rgba(99, 102, 241, 0.2);
+    }
+    .brick.active{
+      opacity:1;
+      transform:translateY(0);
+    }
+    .brick::after{
+      content:"💰";
+      position:absolute;
+      top:50%;
+      left:50%;
+      transform:translate(-50%,-50%);
+      font-size:16px;
+    }
+
+    /* 顶部标题 */
+    .title-box{
+      background:#6366F1;
+      color:white;
+      text-align:center;
+      padding:16px;
+      border-radius:12px;
+      font-size:20px;
+      font-weight:600;
+      margin-bottom:20px;
+      box-shadow:0 6px 20px rgba(99, 102, 241, 0.15);
+    }
+
+    /* 计分板 */
+    .score-board{
+      background:#FFFFFF;
+      border-radius:12px;
+      padding:14px;
+      text-align:center;
+      font-size:16px;
+      font-weight:500;
+      margin-bottom:20px;
+      box-shadow:0 4px 15px rgba(0,0,0,0.05);
+      color:#374151;
+    }
+
+    /* 输入区域 */
+    .input-area{
+      background:#FFFFFF;
+      padding:24px;
+      border-radius:16px;
+      box-shadow:0 4px 15px rgba(0,0,0,0.04);
+      margin-bottom:24px;
+    }
+    textarea{
+      width:100%;
+      height:140px;
+      padding:14px;
+      font-size:15px;
+      border:1px solid #E5E7EB;
+      border-radius:10px;
+      background:#F9FAFB;
+      resize:none;
+    }
+
+    /* 按钮样式 - 高级简约 */
+    button{
+      padding:10px 18px;
+      margin:6px 5px;
+      border:none;
+      border-radius:10px;
+      font-size:15px;
+      font-weight:500;
+      cursor:pointer;
+      transition:all 0.2s ease;
+    }
+    button:hover{
+      transform:translateY(-1px);
+      box-shadow:0 4px 10px rgba(0,0,0,0.08);
+    }
+    .btn-primary{
+      background:#6366F1;
+      color:white;
+    }
+    .btn-success{
+      background:#10B981;
+      color:white;
+    }
+    .btn-warning{
+      background:#F59E0B;
+      color:white;
+    }
+    .btn-light{
+      background:#EEF2FF;
+      color:#6366F1;
+    }
+
+    /* 题目卡片 */
+    .game-item{
+      background:#FFFFFF;
+      padding:22px;
+      border-radius:16px;
+      box-shadow:0 4px 15px rgba(0,0,0,0.04);
+      margin-bottom:20px;
+    }
+    .sentence-number{
+      font-weight:600;
+      color:#6366F1;
+      margin-bottom:10px;
+      font-size:17px;
+    }
+    .hint{
+      color:#4B5563;
+      margin-bottom:16px;
+      font-size:16px;
+      line-height:1.6;
+    }
+
+    /* 单词块 - 放大 */
+    .words{
+      display:flex;
+      flex-wrap:wrap;
+      gap:10px;
+      margin-bottom:20px;
+      min-height:60px;
+    }
+    .word{
+      padding:14px 18px;
+      background:#EEF2FF;
+      color:#374151;
+      border-radius:10px;
+      cursor:pointer;
+      font-size:18px;
+      font-weight:500;
+      transition:0.2s;
+    }
+    .word:hover{
+      background:#D1D5F9;
+    }
+
+    /* 答案区 */
+    .answer-line{
+      display:flex;
+      flex-wrap:wrap;
+      gap:10px;
+      padding:16px;
+      background:#F9FAFB;
+      border-radius:12px;
+      min-height:70px;
+      margin-bottom:16px;
+    }
+    .word-correct{
+      background:#A7F3D0 !important;
+      color:#065F46;
+      font-weight:500;
+      border-radius:10px;
+      padding:12px 16px;
+      font-size:17px;
+    }
+    .word-wrong{
+      background:#FECACA !important;
+      color:#7F1D1D;
+      font-weight:500;
+      border-radius:10px;
+      padding:12px 16px;
+      font-size:17px;
+      cursor:pointer;
+    }
+
+    .result{
+      font-weight:500;
+      margin-top:10px;
+      font-size:16px;
+    }
+    .correct{
+      color:#10B981;
+    }
+    .wrong{
+      color:#EF4444;
+    }
+
+    /* 通关弹窗 */
+    .victory{
+      position:fixed;
+      top:50%;
+      left:50%;
+      transform:translate(-50%,-50%);
+      background:white;
+      border-radius:20px;
+      padding:40px 50px;
+      text-align:center;
+      font-size:22px;
+      font-weight:600;
+      color:#374151;
+      box-shadow:0 10px 40px rgba(0,0,0,0.1);
+      z-index:999;
+      display:none;
+    }
+  </style>
+</head>
+<body>
+
+<div class="brick-tower" id="brickTower"></div>
+
+<div class="victory" id="victoryModal">
+  🎉 恭喜通关！成功登顶！🎉
+  <br><br>
+  <button onclick="closeVictory()" class="btn-primary">再来一局</button>
+</div>
+
+<div class="container">
+  <div class="title-box">连词成句 · 闯关游戏</div>
+
+  <div class="score-board">
+    用时：<span id="time">0</span> 秒 | 总分：<span id="score">0</span> 分 | 已闯：<span id="progress">0</span>/<span id="total">0</span> 关
+  </div>
+
+  <div class="input-area" id="inputArea">
+    <h3 style="color:#374151;margin-top:0;">批量输入句子（格式：英文句子|中文提示 一行一句）</h3>
+    <textarea id="inputText" placeholder="例如：
+I like apples|我喜欢苹果
+She can swim|她会游泳
+We are friends|我们是朋友"></textarea>
+    <br>
+    <button onclick="startGame()" class="btn-success">开始闯关</button>
+    <button onclick="resetAll()" class="btn-warning">全部重置</button>
+  </div>
+
+  <div id="gameContainer"></div>
+</div>
+
+<script>
+let games = [];
+let startTime = null;
+let timer = null;
+let totalScore = 0;
+
+// 读取 URL 参数自动加载配置文件
+(function initFromParam() {
+  const params = new URLSearchParams(window.location.search);
+  const config = params.get('config');
+  if (!config) return;
+
+  // 隐藏手动输入区域，显示加载提示
+  const inputArea = document.getElementById('inputArea');
+  inputArea.innerHTML = '<p style="color:#6366F1;font-weight:500;">⏳ 正在加载词表：' + config + '.json …</p>';
+
+  fetch(config + '.json')
+    .then(res => {
+      if (!res.ok) throw new Error('文件不存在：' + config + '.json');
+      return res.text();
+    })
+    .then(text => {
+      // 将加载到的内容填入 textarea 并自动开始
+      inputArea.innerHTML = `
+        <h3 style="color:#374151;margin-top:0;">词表：${config}.json</h3>
+        <textarea id="inputText" style="display:none;">${text.trim()}</textarea>
+        <button onclick="startGame()" class="btn-success">重新开始</button>
+        <button onclick="resetAll()" class="btn-warning">全部重置</button>
+      `;
+      startGame();
+    })
+    .catch(err => {
+      inputArea.innerHTML = `
+        <p style="color:#EF4444;font-weight:500;">❌ 加载失败：${err.message}</p>
+        <h3 style="color:#374151;margin-top:16px;">或手动输入句子（格式：英文句子|中文提示 一行一句）</h3>
+        <textarea id="inputText" placeholder="例如：
+I like apples|我喜欢苹果
+She can swim|她会游泳
+We are friends|我们是朋友"></textarea>
+        <br>
+        <button onclick="startGame()" class="btn-success">开始闯关</button>
+        <button onclick="resetAll()" class="btn-warning">全部重置</button>
+      `;
+    });
+}());
+
+// 朗读单词
+function speakWord(word) {
+  if ('speechSynthesis' in window) {
+    let u = new SpeechSynthesisUtterance(word);
+    u.lang = 'en-US';
+    u.rate = 0.95;
+    window.speechSynthesis.speak(u);
+  }
+}
+// 朗读中文
+function speakChinese(text) {
+  if ('speechSynthesis' in window) {
+    let u = new SpeechSynthesisUtterance(text);
+    u.lang = 'zh-CN';
+    u.rate = 0.95;
+    window.speechSynthesis.speak(u);
+  }
+}
+
+// 开始游戏
+function startGame(){
+  const text = document.getElementById("inputText").value.trim();
+  if(!text){alert("请输入句子！");return}
+
+  startTime = new Date();
+  totalScore = 0;
+  document.getElementById("score").textContent = 0;
+  clearInterval(timer);
+  timer = setInterval(updateTime,1000);
+
+  const lines = text.split("\n").filter(l=>l.trim());
+  const container = document.getElementById("gameContainer");
+  container.innerHTML = "";
+  games = [];
+
+  // 砖块塔
+  brickTower.innerHTML = "";
+  for(let i=0;i<lines.length;i++){
+    let b = document.createElement("div");
+    b.className = "brick";
+    b.id = "brick-"+(i+1);
+    brickTower.appendChild(b);
+  }
+  document.getElementById("total").textContent = lines.length;
+  document.getElementById("progress").textContent = 0;
+
+  lines.forEach((line,idx)=>{
+    const [en,cn] = line.split("|").map(i=>i.trim());
+    if(!en) return;
+    const game = {
+      id:idx+1, en:en, cn:cn,
+      words:en.split(/\s+/).filter(w=>w),
+      userAnswer:[], shuffled:[], finished:false
+    };
+    game.shuffled = [...game.words].sort(()=>Math.random()-0.5);
+    games.push(game);
+    renderGame(game);
+  });
+}
+
+// 渲染题目
+function renderGame(g){
+  const container = document.getElementById("gameContainer");
+  const div = document.createElement("div");
+  div.className = "game-item";
+  div.innerHTML = `
+    <div class="sentence-number">第 ${g.id} 关</div>
+    <div class="hint">
+      中文提示：${g.cn}
+      <button onclick="speakChinese('${g.cn.replace(/'/g,"\\'")}')" class="btn-light" style="padding:6px 12px;font-size:13px;">🔊 读中文</button>
+    </div>
+    <div class="words" id="words-${g.id}"></div>
+    <div class="answer-line" id="answer-${g.id}"></div>
+    <button onclick="check(${g.id})" class="btn-success">检查</button>
+    <button onclick="resetOne(${g.id})" class="btn-warning">重置本题</button>
+    <div id="result-${g.id}" class="result"></div>
+  `;
+  container.appendChild(div);
+  refreshGame(g);
+}
+
+function refreshGame(g){
+  const wordsEl = document.getElementById(`words-${g.id}`);
+  const ansEl = document.getElementById(`answer-${g.id}`);
+  
+  wordsEl.innerHTML = g.shuffled.map(w=>`
+    <span class="word" onclick="pick(${g.id},'${w.replace(/'/g,"\\'")}')">${w}</span>
+  `).join("");
+
+  let ansHTML = '';
+  g.userAnswer.forEach((word, index) => {
+    let correct = g.words[index] === word;
+    let cls = correct ? 'word-correct' : 'word-wrong';
+    let click = correct ? '' : `onclick="putBack(${g.id},${index})"`;
+    ansHTML += `<span class="${cls}" ${click}>${word}${correct?' ✅':' ❌'}</span>`;
+  });
+  ansEl.innerHTML = ansHTML;
+}
+
+// 选单词
+function pick(id,word){
+  const g = games.find(x=>x.id===id);
+  if(!g || g.finished) return;
+  speakWord(word);
+  const i = g.shuffled.indexOf(word);
+  if(i===-1)return;
+  g.shuffled.splice(i,1);
+  g.userAnswer.push(word);
+  refreshGame(g);
+}
+
+// 放回错误单词
+function putBack(id,index){
+  const g = games.find(x=>x.id===id);
+  if(!g || g.finished) return;
+  const word = g.userAnswer[index];
+  g.userAnswer.splice(index,1);
+  g.shuffled.push(word);
+  refreshGame(g);
+}
+
+// 检查
+function check(id){
+  const g = games.find(x=>x.id===id);
+  if(!g || g.finished) return;
+  const ok = JSON.stringify(g.userAnswer) === JSON.stringify(g.words);
+  const res = document.getElementById(`result-${g.id}`);
+
+  if(ok){
+    res.className = "result correct";
+    res.textContent = "✅ 回答正确！获得金币 + 砖块";
+    if(!g.finished){
+      g.finished = true;
+      document.getElementById(`brick-${g.id}`).classList.add("active");
+      // 大量加分
+      totalScore += 500;
+      document.getElementById("score").textContent = totalScore;
+      // 进度
+      const done = games.filter(x=>x.finished).length;
+      document.getElementById("progress").textContent = done;
+      // 通关
+      if(done === games.length){
+        setTimeout(()=>{
+          document.getElementById("victoryModal").style.display = "block";
+        },600);
+      }
+    }
+  }else{
+    res.className = "result wrong";
+    res.textContent = "❌ 有错误，点击红色单词可放回重选";
+  }
+  refreshGame(g);
+}
+
+// 重置本题
+function resetOne(id){
+  const g = games.find(x=>x.id===id);
+  if(!g)return;
+  g.shuffled = [...g.words].sort(()=>Math.random()-0.5);
+  g.userAnswer = [];
+  g.finished = false;
+  document.getElementById(`result-${id}`).textContent = "";
+  document.getElementById(`brick-${id}`).classList.remove("active");
+  const done = games.filter(x=>x.finished).length;
+  document.getElementById("progress").textContent = done;
+  refreshGame(g);
+}
+
+// 全部重置
+function resetAll(){
+  const inputEl = document.getElementById("inputText");
+  if (inputEl) inputEl.value = "";
+  document.getElementById("gameContainer").innerHTML = "";
+  document.getElementById("time").textContent = 0;
+  document.getElementById("score").textContent = 0;
+  document.getElementById("progress").textContent = 0;
+  document.getElementById("total").textContent = 0;
+  games = [];
+  startTime = null;
+  clearInterval(timer);
+  brickTower.innerHTML = "";
+  document.getElementById("victoryModal").style.display = "none";
+}
+
+// 计时
+function updateTime(){
+  if(!startTime)return;
+  const s = Math.floor((new Date()-startTime)/1000);
+  document.getElementById("time").textContent = s;
+}
+
+// 关闭通关
+function closeVictory(){
+  document.getElementById("victoryModal").style.display = "none";
+  resetAll();
+}
+</script>
+</body>
+</html>
