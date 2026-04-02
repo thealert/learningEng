@@ -455,6 +455,8 @@ function speakBySpeechAPI(text, lang) {
 
 // 朗读单词：Android → 讯飞优先；iOS/Windows → 直接 Web Speech API
 function speakWord(word) {
+  ttsLog('UA: ' + navigator.userAgent.substring(0, 60));
+  ttsLog('isAndroid=' + isAndroid + ' | speakWord: ' + word);
   if (isAndroid) {
     speakByXunfei(word).then(ok => { if (!ok) speakBySpeechAPI(word, 'en-US'); });
   } else {
@@ -464,9 +466,12 @@ function speakWord(word) {
 
 // 朗读中文：Android → 讯飞优先；iOS/Windows → 直接 Web Speech API
 function speakChinese(text) {
+  ttsLog('UA: ' + navigator.userAgent.substring(0, 60));
+  ttsLog('isAndroid=' + isAndroid + ' | speakChinese: ' + text.substring(0, 20));
   if (isAndroid) {
     speakByXunfei(text).then(ok => { if (!ok) speakBySpeechAPI(text, 'zh-CN'); });
   } else {
+    ttsLog('→ Web Speech API (非Android)');
     speakBySpeechAPI(text, 'zh-CN');
   }
 }
